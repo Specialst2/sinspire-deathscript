@@ -11,6 +11,15 @@ local function msg(target, text, tag)
   TriggerClientEvent('chat:addMessage', target, { args = { tag or '^2System', text } })
 end
 
+local function isDown(target, notify)
+  local st = down[target]
+  if not st then
+    msg(notify or target, 'You are not down right now.', '^3System')
+    return false
+  end
+  return true, st
+end
+
 local function hasAce(src, perm)
   if src == 0 then return true end -- console always allowed
   return IsPlayerAceAllowed(src, perm)
@@ -42,11 +51,10 @@ end, false)
 RegisterCommand('revive', function(src, args)
   local target = tonumber(args[1] or '') or src
   if not online(target) then return msg(src, 'Player not online.', '^1System') end
-  local st = down[target]
-  if st then
-    local left = secsLeft(st.reviveAt)
-    if left > 0 then return msg(src, ('Revive available in %ss'):format(left), '^3System') end
-  end
+  local ok, st = isDown(target, src)
+  if not ok then return end
+  local left = secsLeft(st.reviveAt)
+  if left > 0 then return msg(src, ('Revive available in %ss'):format(left), '^3System') end
   TriggerClientEvent('sinspire_death:reviveClient', target)
   down[target] = nil
   if target ~= src then
@@ -58,11 +66,10 @@ end, false)
 RegisterCommand('respawn', function(src, args)
   local target = tonumber(args[1] or '') or src
   if not online(target) then return msg(src, 'Player not online.', '^1System') end
-  local st = down[target]
-  if st then
-    local left = secsLeft(st.respawnAt)
-    if left > 0 then return msg(src, ('Respawn available in %ss'):format(left), '^3System') end
-  end
+  local ok, st = isDown(target, src)
+  if not ok then return end
+  local left = secsLeft(st.respawnAt)
+  if left > 0 then return msg(src, ('Respawn available in %ss'):format(left), '^3System') end
   TriggerClientEvent('sinspire_death:respawnClient', target)
   down[target] = nil
   if target ~= src then
@@ -73,11 +80,10 @@ end, false)
 
 RegisterNetEvent('sinspire_death:reqRespawn', function()
   local src = source
-  local st = down[src]
-  if st then
-    local left = secsLeft(st.respawnAt)
-    if left > 0 then return msg(src, ('Respawn available in %ss'):format(left), '^3System') end
-  end
+  local ok, st = isDown(src)
+  if not ok then return end
+  local left = secsLeft(st.respawnAt)
+  if left > 0 then return msg(src, ('Respawn available in %ss'):format(left), '^3System') end
   TriggerClientEvent('sinspire_death:respawnClient', src)
   down[src] = nil
 end)
