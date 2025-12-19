@@ -6,6 +6,8 @@ local canRespawn, canRevive = false, false
 
 local heartbeatRunning, heartbeatSoundId = false, nil
 
+local heartbeatRunning, heartbeatSoundId = false, nil
+
 -- ================= visuals =================
 local function drawTxt(msg, x, y, scale, r, g, b, a)
     SetTextFont(4)
