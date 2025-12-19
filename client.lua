@@ -6,6 +6,8 @@ local canRespawn, canRevive = false, false
 
 local heartbeatRunning, heartbeatSoundId = false, nil
 
+local heartbeatRunning, heartbeatSoundId = false, nil
+
 -- ================= visuals =================
 local function drawTxt(msg, x, y, scale, r, g, b, a)
     SetTextFont(4)
@@ -45,24 +47,27 @@ local function healCommon(ped)
     SetPedArmour(ped, Config.RespawnArmor)
 end
 
+local function healCommon(ped)
+    ClearPedBloodDamage(ped)
+    ResetPedVisibleDamage(ped)
+    ClearPedTasksImmediately(ped)
+    SetEntityHealth(ped, Config.RespawnHealth)
+    SetPedArmour(ped, Config.RespawnArmor)
+end
+
 -- ================= audio (light duck, not mute) =================
 local AUDIO_SCENE = "MP_MENU_SCENE"
-local duckActive = false
 local function startAudioDuck()
-    local duck = Config.AudioDuckVolume or 1.0
-    if duck >= 1.0 or duck <= 0.0 then return end -- skip if effectively disabled
     if not IsAudioSceneActive(AUDIO_SCENE) then StartAudioScene(AUDIO_SCENE) end
-    SetAudioSceneVariable(AUDIO_SCENE, "KillstreakVolume", duck)
-    SetAudioSceneVariable(AUDIO_SCENE, "MapZoomVolume", duck)
-    duckActive = true
+    SetAudioSceneVariable(AUDIO_SCENE, "KillstreakVolume", Config.AudioDuckVolume)
+    SetAudioSceneVariable(AUDIO_SCENE, "MapZoomVolume", Config.AudioDuckVolume)
 end
 local function stopAudioDuck()
-    if duckActive and IsAudioSceneActive(AUDIO_SCENE) then
+    if IsAudioSceneActive(AUDIO_SCENE) then
         SetAudioSceneVariable(AUDIO_SCENE, "KillstreakVolume", 1.0)
         SetAudioSceneVariable(AUDIO_SCENE, "MapZoomVolume", 1.0)
         StopAudioScene(AUDIO_SCENE)
     end
-    duckActive = false
 end
 
 -- ================= cinematic FX (visuals + heartbeat) =================
@@ -241,8 +246,6 @@ CreateThread(function()
                 -- Explicitly allow free-look (mouse/controller) while downed
                 EnableControlAction(0, 1, true)   -- Look left/right
                 EnableControlAction(0, 2, true)   -- Look up/down
-                EnableControlAction(0, 245, true) -- Text chat
-                EnableControlAction(0, 249, true) -- Push-to-talk
             end
 
             -- let GTA handle the default death cam — no camera overrides here
