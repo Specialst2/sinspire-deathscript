@@ -23,3 +23,17 @@ Config.RespawnArmor  = 0
 
 -- While downed, player can't move or attack but can free-look and chat
 Config.DisableControlsWhileDown = true
+
+-- Set to 1.0 to disable ducking entirely.
+Config.AudioDuckVolume = 0.8
+
+-- Cinematic downed effects
+Config.DownedEffects = {
+  Timecycle = 'hud_def_desat',       -- visual desaturation modifier
+  DesatStrength = 0.35,              -- intensity of the desaturation (0-1)
+  EnableBlur = true,                 -- optional light blur overlay
+  BlurFadeMs = 600,                  -- fade in/out duration for blur
+  FadeOutMs = 500,                   -- how long to ease visuals out on revive/respawn
+  HeartbeatVolume = 0.20,            -- 0.0 to disable the loop entirely
+  HeartbeatIntervalMs = 1200         -- gap between heartbeat pulses
+}
