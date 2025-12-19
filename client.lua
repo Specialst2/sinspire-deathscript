@@ -47,9 +47,15 @@ end
 local AUDIO_SCENE = "MP_MENU_SCENE"
 local function startAudioDuck()
     if not IsAudioSceneActive(AUDIO_SCENE) then StartAudioScene(AUDIO_SCENE) end
+    SetAudioSceneVariable(AUDIO_SCENE, "KillstreakVolume", Config.AudioDuckVolume)
+    SetAudioSceneVariable(AUDIO_SCENE, "MapZoomVolume", Config.AudioDuckVolume)
 end
 local function stopAudioDuck()
-    if IsAudioSceneActive(AUDIO_SCENE) then StopAudioScene(AUDIO_SCENE) end
+    if IsAudioSceneActive(AUDIO_SCENE) then
+        SetAudioSceneVariable(AUDIO_SCENE, "KillstreakVolume", 1.0)
+        SetAudioSceneVariable(AUDIO_SCENE, "MapZoomVolume", 1.0)
+        StopAudioScene(AUDIO_SCENE)
+    end
 end
 
 -- ================= revive / respawn =================
@@ -159,6 +165,10 @@ CreateThread(function()
                 DisableControlAction(0, 140, true)  -- Melee
                 DisableControlAction(0, 141, true)
                 DisableControlAction(0, 142, true)
+
+                -- Explicitly allow free-look (mouse/controller) while downed
+                EnableControlAction(0, 1, true)   -- Look left/right
+                EnableControlAction(0, 2, true)   -- Look up/down
             end
 
             -- let GTA handle the default death cam — no camera overrides here
