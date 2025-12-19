@@ -23,3 +23,6 @@ Config.RespawnArmor  = 0
 
 -- While downed, player can't move or attack but can free-look and chat
 Config.DisableControlsWhileDown = true
+
+-- Gentle audio ducking while downed (1.0 = normal volume, lower = quieter)
+Config.AudioDuckVolume = 0.65
