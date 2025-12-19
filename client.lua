@@ -4,6 +4,8 @@ local isDead, notifySent = false, false
 local respawnTimer, reviveTimer = 0, 0
 local canRespawn, canRevive = false, false
 
+local heartbeatRunning, heartbeatSoundId = false, nil
+
 -- ================= visuals =================
 local function drawTxt(msg, x, y, scale, r, g, b, a)
     SetTextFont(4)
@@ -43,6 +45,14 @@ local function healCommon(ped)
     SetPedArmour(ped, Config.RespawnArmor)
 end
 
+local function healCommon(ped)
+    ClearPedBloodDamage(ped)
+    ResetPedVisibleDamage(ped)
+    ClearPedTasksImmediately(ped)
+    SetEntityHealth(ped, Config.RespawnHealth)
+    SetPedArmour(ped, Config.RespawnArmor)
+end
+
 -- ================= audio (light duck, not mute) =================
 local AUDIO_SCENE = "MP_MENU_SCENE"
 local function startAudioDuck()
@@ -58,6 +68,67 @@ local function stopAudioDuck()
     end
 end
 
+-- ================= cinematic FX (visuals + heartbeat) =================
+local function startDownedFx()
+    if Config.DownedEffects.Timecycle then
+        SetTimecycleModifier(Config.DownedEffects.Timecycle)
+        SetTimecycleModifierStrength(Config.DownedEffects.DesatStrength or 0.35)
+    end
+
+    if Config.DownedEffects.EnableBlur then
+        TriggerScreenblurFadeIn(Config.DownedEffects.BlurFadeMs or 500)
+    end
+
+    if (Config.DownedEffects.HeartbeatVolume or 0) > 0 and not heartbeatRunning then
+        heartbeatRunning = true
+        CreateThread(function()
+            local interval = Config.DownedEffects.HeartbeatIntervalMs or 1200
+            while heartbeatRunning and isDead do
+                heartbeatSoundId = GetSoundId()
+                PlaySoundFromEntity(heartbeatSoundId, "HeartBeat", PlayerPedId(), "MP_MISSION_COUNTDOWN_SOUNDSET", false, 0)
+                SetVariableOnSound(heartbeatSoundId, "Volume", Config.DownedEffects.HeartbeatVolume)
+
+                local elapsed = 0
+                while heartbeatRunning and elapsed < interval do
+                    Wait(100)
+                    elapsed = elapsed + 100
+                end
+
+                StopSound(heartbeatSoundId)
+                ReleaseSoundId(heartbeatSoundId)
+                heartbeatSoundId = nil
+            end
+        end)
+    end
+end
+
+local function stopDownedFx()
+    heartbeatRunning = false
+    if heartbeatSoundId then
+        StopSound(heartbeatSoundId)
+        ReleaseSoundId(heartbeatSoundId)
+        heartbeatSoundId = nil
+    end
+
+    if Config.DownedEffects.EnableBlur then
+        TriggerScreenblurFadeOut(Config.DownedEffects.BlurFadeMs or 500)
+    end
+
+    if Config.DownedEffects.Timecycle then
+        local fade = Config.DownedEffects.FadeOutMs or 0
+        if fade > 0 then
+            local steps = math.max(1, math.floor(fade / 80))
+            for i = steps, 0, -1 do
+                local strength = (Config.DownedEffects.DesatStrength or 0.35) * (i / steps)
+                SetTimecycleModifierStrength(strength)
+                Wait(80)
+            end
+        end
+        ClearTimecycleModifier()
+        ClearExtraTimecycleModifier()
+    end
+end
+
 -- ================= revive / respawn =================
 local function reviveHere()
     local ped = PlayerPedId()
@@ -66,6 +137,7 @@ local function reviveHere()
 
     DoScreenFadeOut(120); while not IsScreenFadedOut() do Wait(0) end
     stopAudioDuck()
+    stopDownedFx()
     RenderScriptCams(false, false, 0, true, true)
 
     NetworkResurrectLocalPlayer(coords.x, coords.y, coords.z, heading, true, true, false)
@@ -82,6 +154,7 @@ local function respawnHospital()
 
     DoScreenFadeOut(160); while not IsScreenFadedOut() do Wait(0) end
     stopAudioDuck()
+    stopDownedFx()
     RenderScriptCams(false, false, 0, true, true)
 
     NetworkResurrectLocalPlayer(spot.coords.x, spot.coords.y, spot.coords.z, spot.heading or 0.0, true, true, false)
@@ -128,12 +201,14 @@ CreateThread(function()
             canRespawn, canRevive = false, false
 
             startAudioDuck()
+            startDownedFx()
             RenderScriptCams(false, false, 0, true, true)
 
             TriggerServerEvent('sinspire_death:setDownState', Config.ReviveDelaySeconds, Config.RespawnDelaySeconds)
 
         elseif not nowDead and wasDead then
             stopAudioDuck()
+            stopDownedFx()
             RenderScriptCams(false, false, 0, true, true)
             isDead, notifySent = false, false
             respawnTimer, reviveTimer = 0, 0
