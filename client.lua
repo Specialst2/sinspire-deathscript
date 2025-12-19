@@ -5,6 +5,10 @@ local respawnTimer, reviveTimer = 0, 0
 local canRespawn, canRevive = false, false
 
 local heartbeatRunning, heartbeatSoundId = false, nil
+local deathFxActive = false
+local weaponLoopActive = false
+
+local heartbeatRunning, heartbeatSoundId = false, nil
 
 local heartbeatRunning, heartbeatSoundId = false, nil
 
