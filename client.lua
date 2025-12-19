@@ -45,6 +45,14 @@ local function healCommon(ped)
     SetPedArmour(ped, Config.RespawnArmor)
 end
 
+local function healCommon(ped)
+    ClearPedBloodDamage(ped)
+    ResetPedVisibleDamage(ped)
+    ClearPedTasksImmediately(ped)
+    SetEntityHealth(ped, Config.RespawnHealth)
+    SetPedArmour(ped, Config.RespawnArmor)
+end
+
 -- ================= audio (light duck, not mute) =================
 local AUDIO_SCENE = "MP_MENU_SCENE"
 local function startAudioDuck()
