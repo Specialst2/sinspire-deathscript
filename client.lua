@@ -4,6 +4,10 @@ local isDead, notifySent = false, false
 local respawnTimer, reviveTimer = 0, 0
 local canRespawn, canRevive = false, false
 
+local heartbeatRunning, heartbeatSoundId = false, nil
+local deathFxActive = false
+local weaponLoopActive = false
+
 -- ================= visuals =================
 local function drawTxt(msg, x, y, scale, r, g, b, a)
     SetTextFont(4)
@@ -43,13 +47,104 @@ local function healCommon(ped)
     SetPedArmour(ped, Config.RespawnArmor)
 end
 
--- ================= audio (light duck, not mute) =================
-local AUDIO_SCENE = "MP_MENU_SCENE"
-local function startAudioDuck()
-    if not IsAudioSceneActive(AUDIO_SCENE) then StartAudioScene(AUDIO_SCENE) end
+-- ================= cinematic FX (visuals + heartbeat) =================
+function ApplyDeathFX()
+    if deathFxActive then return end
+
+    local activated = false
+
+    if Config.DeathFX then
+        SetTimecycleModifier('hud_def_desat')
+        SetTimecycleModifierStrength(Config.DeathFXStrength or 0.35)
+        if Config.DeathFXBlur then
+            TriggerScreenblurFadeIn(Config.DeathFXBlurFadeMs or 500)
+        end
+        activated = true
+    end
+
+    if Config.Heartbeat and (Config.HeartbeatVolume or 0) > 0 and not heartbeatRunning then
+        heartbeatRunning = true
+        CreateThread(function()
+            local interval = Config.HeartbeatIntervalMs or 1200
+            while heartbeatRunning and isDead do
+                heartbeatSoundId = GetSoundId()
+                PlaySoundFromEntity(heartbeatSoundId, "HeartBeat", PlayerPedId(), "MP_MISSION_COUNTDOWN_SOUNDSET", false, 0)
+                SetVariableOnSound(heartbeatSoundId, "Volume", Config.HeartbeatVolume)
+
+                local elapsed = 0
+                while heartbeatRunning and elapsed < interval do
+                    Wait(100)
+                    elapsed = elapsed + 100
+                end
+
+                StopSound(heartbeatSoundId)
+                ReleaseSoundId(heartbeatSoundId)
+                heartbeatSoundId = nil
+            end
+        end)
+        activated = true
+    end
+
+    deathFxActive = activated
 end
-local function stopAudioDuck()
-    if IsAudioSceneActive(AUDIO_SCENE) then StopAudioScene(AUDIO_SCENE) end
+
+function ClearDeathFX()
+    if not deathFxActive and not heartbeatRunning then return end
+
+    heartbeatRunning = false
+    if heartbeatSoundId then
+        StopSound(heartbeatSoundId)
+        ReleaseSoundId(heartbeatSoundId)
+        heartbeatSoundId = nil
+    end
+
+    if Config.DeathFX then
+        local fade = Config.DeathFXFadeOutMs or 0
+        if fade > 0 then
+            local steps = math.max(1, math.floor(fade / 80))
+            for i = steps, 0, -1 do
+                local strength = (Config.DeathFXStrength or 0.35) * (i / steps)
+                SetTimecycleModifierStrength(strength)
+                Wait(80)
+            end
+        end
+        ClearTimecycleModifier()
+        ClearExtraTimecycleModifier()
+    end
+
+    if Config.DeathFX and Config.DeathFXBlur then
+        TriggerScreenblurFadeOut(Config.DeathFXBlurFadeMs or 500)
+    end
+
+    deathFxActive = false
+end
+
+-- ================= weapon lock while downed =================
+local function enforceUnarmedWhileDowned()
+    if weaponLoopActive or not Config.DisableWeaponsWhileDowned then return end
+    weaponLoopActive = true
+
+    CreateThread(function()
+        while isDead and Config.DisableWeaponsWhileDowned do
+            local ped = PlayerPedId()
+
+            if GetSelectedPedWeapon(ped) ~= `WEAPON_UNARMED` then
+                SetCurrentPedWeapon(ped, `WEAPON_UNARMED`, true)
+            end
+
+            DisableControlAction(0, 24, true)  -- attack
+            DisableControlAction(0, 25, true)  -- aim
+            DisableControlAction(0, 37, true)  -- weapon wheel
+            DisableControlAction(0, 45, true)  -- reload
+            DisableControlAction(0, 140, true) -- melee
+            DisableControlAction(0, 141, true)
+            DisableControlAction(0, 142, true)
+
+            Wait(20)
+        end
+
+        weaponLoopActive = false
+    end)
 end
 
 -- ================= revive / respawn =================
@@ -59,7 +154,7 @@ local function reviveHere()
     local heading = GetEntityHeading(ped)
 
     DoScreenFadeOut(120); while not IsScreenFadedOut() do Wait(0) end
-    stopAudioDuck()
+    ClearDeathFX()
     RenderScriptCams(false, false, 0, true, true)
 
     NetworkResurrectLocalPlayer(coords.x, coords.y, coords.z, heading, true, true, false)
@@ -75,7 +170,7 @@ local function respawnHospital()
     local ped  = PlayerPedId()
 
     DoScreenFadeOut(160); while not IsScreenFadedOut() do Wait(0) end
-    stopAudioDuck()
+    ClearDeathFX()
     RenderScriptCams(false, false, 0, true, true)
 
     NetworkResurrectLocalPlayer(spot.coords.x, spot.coords.y, spot.coords.z, spot.heading or 0.0, true, true, false)
@@ -121,13 +216,14 @@ CreateThread(function()
             reviveTimer  = Config.ReviveDelaySeconds
             canRespawn, canRevive = false, false
 
-            startAudioDuck()
+            ApplyDeathFX()
+            enforceUnarmedWhileDowned()
             RenderScriptCams(false, false, 0, true, true)
 
             TriggerServerEvent('sinspire_death:setDownState', Config.ReviveDelaySeconds, Config.RespawnDelaySeconds)
 
         elseif not nowDead and wasDead then
-            stopAudioDuck()
+            ClearDeathFX()
             RenderScriptCams(false, false, 0, true, true)
             isDead, notifySent = false, false
             respawnTimer, reviveTimer = 0, 0
@@ -159,6 +255,12 @@ CreateThread(function()
                 DisableControlAction(0, 140, true)  -- Melee
                 DisableControlAction(0, 141, true)
                 DisableControlAction(0, 142, true)
+
+                -- Explicitly allow free-look (mouse/controller) while downed
+                EnableControlAction(0, 1, true)   -- Look left/right
+                EnableControlAction(0, 2, true)   -- Look up/down
+                EnableControlAction(0, 245, true) -- Text chat
+                EnableControlAction(0, 249, true) -- Push-to-talk
             end
 
             -- let GTA handle the default death cam — no camera overrides here
